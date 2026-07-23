@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "private-game-translator"
+version = "0.1.0"
+description = "私人 Unity 游戏翻译器 MVP"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "Codex" }
+]
+dependencies = [
+  "PySide6>=6.8,<7"
+]
+
+[project.scripts]
+game-translator = "game_translator.cli:main"
+game-translator-gui = "game_translator.gui_launcher:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
