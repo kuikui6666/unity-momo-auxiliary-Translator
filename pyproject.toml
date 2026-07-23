@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "private-game-translator"
+name = "unity-mono-auxiliary-translator"
 version = "0.1.0"
-description = "私人 Unity 游戏翻译器 MVP"
+description = "A Unity Mono localization helper prototype with CLI and PySide6 desktop workflows."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
