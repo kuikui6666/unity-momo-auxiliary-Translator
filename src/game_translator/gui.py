@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 from functools import partial
 from pathlib import Path
+from typing import Callable
 
 from .app_paths import default_runtime_dir
 from .models import LLMProviderSettings, MachineProviderSettings, TranslationSettings
@@ -21,6 +22,118 @@ from .services import (
 )
 from .settings_store import settings_dir
 from .translation_bridge import TranslationBridgeServer
+
+
+def validate_game_dir_input(path_text: str) -> str | None:
+    path_text = path_text.strip()
+    if not path_text:
+        return "请先选择目标游戏目录。"
+    path = Path(path_text)
+    if not path.exists():
+        return f"目标游戏目录不存在: {path}"
+    if not path.is_dir():
+        return f"目标游戏路径不是目录: {path}"
+    if path.name.endswith("_Data"):
+        return "你选到的是 *_Data 子目录。请改选包含游戏 exe 的根目录。"
+    if (path / "PrivateGameTranslator.exe").exists() or path.name == "PrivateGameTranslator":
+        return "你选到的是本工具的打包目录，不是游戏目录。请改选真正的游戏根目录。"
+    if not any(path.glob("*.exe")):
+        return "目标目录里没有发现 exe。请改选包含游戏主程序的目录。"
+    return None
+
+
+def validate_runtime_dir_input(path_text: str) -> str | None:
+    path_text = path_text.strip()
+    if not path_text:
+        return "请先选择运行时目录。"
+    path = Path(path_text)
+    if not path.exists():
+        return f"运行时目录不存在: {path}"
+    if not path.is_dir():
+        return f"运行时路径不是目录: {path}"
+    if (path / "PrivateGameTranslator.exe").exists() or path.name == "PrivateGameTranslator":
+        return "你选到的是本工具的打包目录，不是运行时目录。请改选包含 AutoTranslator/ReiPatcher/Managed 的目录。"
+    return None
+
+
+def validate_source_game_dir_input(path_text: str) -> str | None:
+    path_text = path_text.strip()
+    if not path_text:
+        return "请先选择样例源游戏目录。"
+    path = Path(path_text)
+    if not path.exists():
+        return f"样例源游戏目录不存在: {path}"
+    if not path.is_dir():
+        return f"样例源游戏路径不是目录: {path}"
+    if path.name.endswith("_Data"):
+        return "样例源游戏目录也应该选游戏根目录，而不是 *_Data 子目录。"
+    return None
+
+
+def validate_translation_settings(settings: TranslationSettings) -> str | None:
+    if not settings.local_host.strip():
+        return "本地 Host 不能为空。"
+    if settings.mode == "llm":
+        if not settings.llm.api_base.strip():
+            return "当前是大模型模式，请先填写 API Base。"
+        if not settings.llm.api_key.strip():
+            return "当前是大模型模式，请先填写 API Key。"
+        if not settings.llm.model.strip():
+            return "当前是大模型模式，请先填写模型名。"
+        return None
+    if not settings.machine.api_base.strip():
+        return "当前是普通机翻模式，请先填写机翻 API Base。"
+    if settings.machine.provider.lower() == "deepl" and not settings.machine.api_key.strip():
+        return "当前是 DeepL 模式，请先填写 API Key。"
+    return None
+
+
+def suggest_next_step(
+    game_dir_text: str,
+    runtime_dir_text: str,
+    source_game_text: str,
+    settings: TranslationSettings,
+    bridge_running: bool,
+) -> str:
+    if not game_dir_text.strip():
+        return "先选择目标游戏目录"
+    if not runtime_dir_text.strip():
+        return "再选择运行时目录"
+    if not source_game_text.strip() and not Path(runtime_dir_text).exists():
+        return "如果没有现成运行时，先选择样例源游戏目录"
+    config_issue = validate_translation_settings(settings)
+    if config_issue is not None:
+        return "补全翻译配置并保存"
+    if not bridge_running:
+        return "先启动翻译服务，再做干运行安装"
+    return "先干运行安装，确认无误后再正式安装"
+
+
+def build_install_summary(result: dict[str, object]) -> str:
+    if result.get("dry_run"):
+        operations = result.get("operations", [])
+        lines = ["安装预览", f"Manifest: {result.get('manifest_path', '未知')}"]
+        lines.extend(f"- {item}" for item in operations if isinstance(item, str))
+        return "\n".join(lines)
+    return "\n".join(
+        [
+            "安装完成",
+            f"写入文件数: {result.get('files_written', 0)}",
+            f"Manifest: {result.get('manifest_path', '未知')}",
+            f"翻译模式: {result.get('translation_mode', '未知')}",
+            f"桥接地址: {result.get('bridge_url', '未知')}",
+        ]
+    )
+
+
+def build_uninstall_summary(result: dict[str, object]) -> str:
+    return "\n".join(
+        [
+            "卸载回滚完成",
+            f"已删除: {result.get('removed', 0)}",
+            f"已恢复备份: {result.get('restored', 0)}",
+        ]
+    )
 
 
 def launch_gui() -> None:
@@ -273,12 +386,15 @@ def launch_gui() -> None:
 
             right = QVBoxLayout()
             right.setAlignment(Qt.AlignmentFlag.AlignTop)
+            self.hero_support_pill = QLabel("支持：仅 Unity Mono")
+            self.hero_support_pill.setObjectName("StatusPill")
             self.hero_mode_pill = QLabel()
             self.hero_mode_pill.setObjectName("StatusPill")
             self.hero_bridge_pill = QLabel()
             self.hero_bridge_pill.setObjectName("StatusPill")
             self.hero_cache_pill = QLabel()
             self.hero_cache_pill.setObjectName("StatusPill")
+            right.addWidget(self.hero_support_pill)
             right.addWidget(self.hero_mode_pill)
             right.addWidget(self.hero_bridge_pill)
             right.addWidget(self.hero_cache_pill)
@@ -299,6 +415,7 @@ def launch_gui() -> None:
             self.summary_runtime_value = QLabel("未选择")
             self.summary_endpoint_value = QLabel("未配置")
             self.summary_cache_value = QLabel("未生成")
+            self.summary_next_step_value = QLabel("先选择目标游戏目录")
 
             layout.addWidget(self._summary_label("目标游戏"), 0, 0)
             layout.addWidget(self.summary_game_value, 0, 1)
@@ -308,6 +425,8 @@ def launch_gui() -> None:
             layout.addWidget(self.summary_endpoint_value, 0, 3)
             layout.addWidget(self._summary_label("缓存文件"), 1, 2)
             layout.addWidget(self.summary_cache_value, 1, 3)
+            layout.addWidget(self._summary_label("建议下一步"), 2, 0)
+            layout.addWidget(self.summary_next_step_value, 2, 1, 1, 3)
             return card
 
         def _summary_label(self, text: str) -> QLabel:
@@ -341,6 +460,13 @@ def launch_gui() -> None:
             path_layout.addWidget(self._build_browse_button(self.source_game_edit), 2, 2)
             path_layout.addWidget(QLabel("目标语言"), 3, 0)
             path_layout.addWidget(self.language_combo, 3, 1)
+            path_layout.addWidget(
+                self._hint_label("当前工具只支持 Unity Mono。请选择包含游戏 exe 和 *_Data/Managed 的游戏根目录。"),
+                4,
+                0,
+                1,
+                3,
+            )
 
             verify_group = QGroupBox("第 2 步：准备环境")
             verify_layout = QGridLayout(verify_group)
@@ -382,9 +508,17 @@ def launch_gui() -> None:
                 3,
             )
 
+            summary_group = QGroupBox("操作摘要")
+            summary_layout = QVBoxLayout(summary_group)
+            self.operation_summary_output = QPlainTextEdit()
+            self.operation_summary_output.setReadOnly(True)
+            self.operation_summary_output.setPlaceholderText("这里会显示检查、导入、安装、回滚的结果摘要。")
+            summary_layout.addWidget(self.operation_summary_output)
+
             root.addWidget(path_group)
             root.addWidget(verify_group)
             root.addWidget(action_group)
+            root.addWidget(summary_group)
             root.addStretch(1)
             return tab
 
@@ -648,12 +782,25 @@ def launch_gui() -> None:
 
         def _save_settings(self) -> None:
             settings = self._get_current_settings()
+            issue = validate_translation_settings(settings)
+            if issue is not None:
+                raise ValueError(issue)
             result = save_settings_service(settings)
             self._settings = settings
             self._update_summary()
             self._update_mode_hint()
             self._append_log("[保存翻译配置] 成功")
             self._append_log(_to_pretty_json(result))
+            self._set_operation_summary(
+                "翻译配置已保存",
+                "\n".join(
+                    [
+                        f"保存位置: {result['path']}",
+                        f"模式: {settings.mode}",
+                        f"本地接口: {settings.local_endpoint_url()}",
+                    ]
+                ),
+            )
             QMessageBox.information(self, "保存翻译配置", "翻译配置已保存。")
 
         def _start_bridge(self) -> None:
@@ -662,8 +809,16 @@ def launch_gui() -> None:
             self._bridge.start()
             self._update_bridge_status()
             self._update_summary()
-            self._append_log(
-                f"[启动翻译服务] 成功，地址: {self._get_current_settings().local_endpoint_url()}"
+            bridge_url = self._get_current_settings().local_endpoint_url()
+            self._append_log(f"[启动翻译服务] 成功，地址: {bridge_url}")
+            self._set_operation_summary(
+                "翻译服务已启动",
+                "\n".join(
+                    [
+                        f"监听地址: {bridge_url}",
+                        "建议下一步: 先做一次干运行安装，确认路径和写入计划。",
+                    ]
+                ),
             )
 
         def _stop_bridge(self) -> None:
@@ -671,17 +826,22 @@ def launch_gui() -> None:
             self._update_bridge_status()
             self._update_summary()
             self._append_log("[停止翻译服务] 已停止")
+            self._set_operation_summary("翻译服务已停止", "如需继续安装或测试翻译，请重新启动本地翻译服务。")
 
         def _inspect_game(self) -> None:
             self._run_action(
                 "检查游戏",
                 lambda: inspect_game_service(self.game_dir_edit.text().strip()),
+                validator=lambda: validate_game_dir_input(self.game_dir_edit.text()),
+                result_formatter=self._format_game_inspection,
             )
 
         def _inspect_runtime(self) -> None:
             self._run_action(
                 "检查运行时",
                 lambda: inspect_runtime_service(self.runtime_dir_edit.text().strip()),
+                validator=lambda: validate_runtime_dir_input(self.runtime_dir_edit.text()),
+                result_formatter=self._format_runtime_inspection,
             )
 
         def _import_runtime(self) -> None:
@@ -691,6 +851,8 @@ def launch_gui() -> None:
                     self.source_game_edit.text().strip(),
                     self.runtime_dir_edit.text().strip(),
                 ),
+                validator=self._validate_runtime_import,
+                result_formatter=self._format_runtime_import,
             )
 
         def _dry_run_install(self) -> None:
@@ -703,6 +865,8 @@ def launch_gui() -> None:
                     dry_run=True,
                     translation_settings=self._get_current_settings(),
                 ),
+                validator=lambda: self._validate_install_inputs(require_runtime_import=False),
+                result_formatter=lambda result: build_install_summary(result),
             )
 
         def _install(self) -> None:
@@ -716,6 +880,8 @@ def launch_gui() -> None:
                     dry_run=False,
                     translation_settings=self._get_current_settings(),
                 ),
+                validator=lambda: self._validate_install_inputs(require_runtime_import=False),
+                result_formatter=lambda result: build_install_summary(result),
                 success_message="安装完成。请保持翻译服务运行后再启动游戏。",
             )
 
@@ -723,6 +889,8 @@ def launch_gui() -> None:
             self._run_action(
                 "卸载回滚",
                 lambda: uninstall_service(self.game_dir_edit.text().strip()),
+                validator=lambda: validate_game_dir_input(self.game_dir_edit.text()),
+                result_formatter=lambda result: build_uninstall_summary(result),
                 success_message="回滚完成。",
             )
 
@@ -758,6 +926,9 @@ def launch_gui() -> None:
 
         def _save_settings_silently(self) -> None:
             settings = self._get_current_settings()
+            issue = validate_translation_settings(settings)
+            if issue is not None:
+                raise ValueError(issue)
             save_settings_service(settings)
             self._settings = settings
             self._update_summary()
@@ -802,6 +973,15 @@ def launch_gui() -> None:
             self.summary_endpoint_value.setText(endpoint)
             cache_file = settings_dir() / "translation_cache.json"
             self.summary_cache_value.setText(self._display_path(str(cache_file)))
+            self.summary_next_step_value.setText(
+                suggest_next_step(
+                    self.game_dir_edit.text(),
+                    self.runtime_dir_edit.text(),
+                    self.source_game_edit.text(),
+                    settings,
+                    self._bridge.is_running,
+                )
+            )
             self.hero_mode_pill.setText(f"模式：{'大模型' if settings.mode == 'llm' else '普通机翻'}")
             self.hero_bridge_pill.setText(f"服务：{'运行中' if self._bridge.is_running else '未启动'}")
             self.hero_cache_pill.setText("缓存：JSON 优先命中")
@@ -818,22 +998,92 @@ def launch_gui() -> None:
             title: str,
             callback,
             success_message: str | None = None,
+            validator: Callable[[], str | None] | None = None,
+            result_formatter: Callable[[dict[str, object]], str] | None = None,
         ) -> None:
             try:
+                if validator is not None:
+                    issue = validator()
+                    if issue is not None:
+                        raise ValueError(issue)
                 result = callback()
                 self._append_log(f"[{title}] 成功")
                 self._append_log(_to_pretty_json(result))
+                if result_formatter is not None:
+                    self._set_operation_summary(title, result_formatter(result))
                 self._update_summary()
                 if success_message:
                     QMessageBox.information(self, title, success_message)
             except Exception as exc:  # noqa: BLE001
                 self._append_log(f"[{title}] 失败: {exc}")
                 self._append_log(traceback.format_exc())
+                self._set_operation_summary(title, f"失败\n{exc}")
                 QMessageBox.critical(self, title, str(exc))
 
         def _append_log(self, message: str) -> None:
             self.log_output.appendPlainText(message)
             self.log_output.appendPlainText("")
+
+        def _set_operation_summary(self, title: str, content: str) -> None:
+            self.operation_summary_output.setPlainText(f"{title}\n\n{content}")
+
+        def _validate_runtime_import(self) -> str | None:
+            source_issue = validate_source_game_dir_input(self.source_game_edit.text())
+            if source_issue is not None:
+                return source_issue
+            return validate_runtime_dir_input(self.runtime_dir_edit.text())
+
+        def _validate_install_inputs(self, require_runtime_import: bool) -> str | None:
+            game_issue = validate_game_dir_input(self.game_dir_edit.text())
+            if game_issue is not None:
+                return game_issue
+            runtime_issue = validate_runtime_dir_input(self.runtime_dir_edit.text())
+            if runtime_issue is not None:
+                return runtime_issue
+            settings_issue = validate_translation_settings(self._get_current_settings())
+            if settings_issue is not None:
+                return settings_issue
+            if require_runtime_import and not self.source_game_edit.text().strip():
+                return "当前运行时目录不可用时，请先选择样例源游戏目录并导入运行时。"
+            return None
+
+        def _format_game_inspection(self, result: dict[str, object]) -> str:
+            return "\n".join(
+                [
+                    "游戏检查通过",
+                    f"EXE: {result.get('exe_name', '未知')}",
+                    f"数据目录: {result.get('data_dir', '未知')}",
+                    f"Managed: {result.get('managed_dir', '未知')}",
+                    f"架构: {result.get('architecture', '未知')}",
+                    "结论: 这是当前工具可尝试处理的 Unity Mono 游戏目录。",
+                ]
+            )
+
+        def _format_runtime_inspection(self, result: dict[str, object]) -> str:
+            managed_files = result.get("managed_files", [])
+            font_files = result.get("font_files", [])
+            return "\n".join(
+                [
+                    "运行时检查通过",
+                    f"运行时根目录: {result.get('root', '未知')}",
+                    f"Managed 文件数: {len(managed_files) if isinstance(managed_files, list) else '未知'}",
+                    f"字体文件数: {len(font_files) if isinstance(font_files, list) else '未知'}",
+                    "建议下一步: 保存翻译配置并先做一次干运行安装。",
+                ]
+            )
+
+        def _format_runtime_import(self, result: dict[str, object]) -> str:
+            managed_files = result.get("managed_files", [])
+            font_files = result.get("font_files", [])
+            return "\n".join(
+                [
+                    "运行时导入完成",
+                    f"运行时根目录: {result.get('root', '未知')}",
+                    f"Managed 文件数: {len(managed_files) if isinstance(managed_files, list) else '未知'}",
+                    f"字体文件数: {len(font_files) if isinstance(font_files, list) else '未知'}",
+                    "建议下一步: 检查运行时 -> 保存配置 -> 干运行安装。",
+                ]
+            )
 
     def _to_pretty_json(data: object) -> str:
         return json.dumps(data, ensure_ascii=False, indent=2, default=str)
