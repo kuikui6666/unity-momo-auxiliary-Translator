@@ -13,6 +13,7 @@ MANIFEST_NAME = "install_manifest.json"
 
 
 def build_install_plan(game: GameInfo, runtime: RuntimeInfo, target_language: str) -> InstallPlan:
+    # 先把计划整理出来，便于 dry-run 预览和 GUI 展示。
     operations = [
         f"复制 AutoTranslator -> {game.game_dir / 'AutoTranslator'}",
         f"复制 ReiPatcher -> {game.game_dir / 'ReiPatcher'}",
@@ -30,6 +31,7 @@ def install_runtime(
     dry_run: bool = False,
     translation_settings: TranslationSettings | None = None,
 ) -> dict[str, object]:
+    # manifest 是卸载/回滚的唯一依据，所以所有写入都要登记进去。
     manifest_entries: list[dict[str, str]] = []
     game_dir = plan.game.game_dir
     manifest_path = game_dir / STATE_DIR_NAME / MANIFEST_NAME
@@ -73,6 +75,7 @@ def install_runtime(
         bridge_url = translation_settings.local_endpoint_url()
         translation_mode = translation_settings.mode
 
+    # Config.ini 始终按当前安装参数重新生成，避免沿用样例游戏里的旧配置。
     config_path = game_dir / "AutoTranslator" / "Config.ini"
     _write_text_with_manifest(
         config_path,
@@ -119,6 +122,7 @@ def uninstall_runtime(game_dir: Path) -> dict[str, object]:
     removed = 0
     restored = 0
 
+    # 倒序回滚可以更稳定地处理“先创建目录、后写文件”的安装链路。
     for entry in reversed(payload["entries"]):
         target = Path(entry["target"])
         backup = entry.get("backup")
@@ -192,6 +196,7 @@ def _build_manifest_entry(target: Path, backup: Path | None) -> dict[str, str]:
 def _backup_if_needed(target: Path) -> Path | None:
     if not target.exists():
         return None
+    # 覆盖目标文件前，先把旧内容移到游戏目录内的私有备份区。
     game_dir = _find_game_root(target)
     backup_root = game_dir / STATE_DIR_NAME / "backup"
     backup_path = backup_root / target.relative_to(game_dir)

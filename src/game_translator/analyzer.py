@@ -6,6 +6,7 @@ from .models import GameInfo
 
 
 def detect_unity_mono_game(game_dir: Path) -> GameInfo:
+    # 入口检测只接受真正的游戏根目录，而不是直接指向 *_Data 子目录。
     game_dir = game_dir.resolve()
     exe_files = sorted(game_dir.glob("*.exe"))
     if not exe_files:
@@ -18,6 +19,7 @@ def detect_unity_mono_game(game_dir: Path) -> GameInfo:
         managed_dir = data_dir / "Managed"
         mono_dir = game_dir / "MonoBleedingEdge"
         if data_dir.exists() and managed_dir.exists():
+            # 当前项目把存在 *_Data/Managed 作为 Unity Mono 的主要识别信号。
             notes: list[str] = []
             if mono_dir.exists():
                 notes.append("检测到 MonoBleedingEdge")
@@ -39,6 +41,7 @@ def detect_unity_mono_game(game_dir: Path) -> GameInfo:
 
 
 def _looks_64_bit(game_dir: Path) -> bool:
+    # 这里只做轻量启发式判断，用来给界面和日志一个大致架构提示。
     if (game_dir / "UnityPlayer.dll").exists():
         return True
     if (game_dir / "GameAssembly.dll").exists():

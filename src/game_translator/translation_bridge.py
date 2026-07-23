@@ -27,6 +27,7 @@ class TranslationBridgeServer:
             return
         settings = self._settings_provider()
         handler = self._build_handler()
+        # 这里直接绑定本地 HTTP 服务，供游戏运行时按 Config.ini 中的地址回调。
         server = ThreadingHTTPServer((settings.local_host, settings.local_port), handler)
         server.bridge = self  # type: ignore[attr-defined]
         self._server = server
@@ -46,6 +47,7 @@ class TranslationBridgeServer:
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         settings: TranslationSettings = self._settings_provider()
         backend_fingerprint = _build_backend_fingerprint(settings)
+        # 缓存键要带上后端指纹，避免切换模型/接口后复用旧结果。
         cache_key = self._cache_store.build_cache_key(
             mode=settings.mode,
             source_lang=source_lang,
@@ -87,6 +89,7 @@ class TranslationBridgeServer:
                 if parsed.path != "/translate":
                     self.send_error(404, "Not Found")
                     return
+                # 目前桥接层保持极简 GET 协议，方便和现有运行时配置对接。
                 query = urllib.parse.parse_qs(parsed.query)
                 text = query.get("text", [""])[0]
                 source_lang = query.get("from", ["auto"])[0]
@@ -133,6 +136,7 @@ def _translate_via_llm(
     body = {
         "model": settings.llm.model,
         "temperature": 0.2,
+        # 把翻译约束固定在 system prompt，user 部分只传本次文本和语言信息。
         "messages": [
             {"role": "system", "content": settings.llm.system_prompt},
             {"role": "user", "content": prompt},

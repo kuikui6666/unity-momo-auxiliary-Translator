@@ -13,6 +13,7 @@ MANAGED_PATTERNS = (
 
 
 def inspect_runtime(runtime_root: Path) -> RuntimeInfo:
+    # 一个“可安装”的运行时目录至少要同时具备这三块结构。
     runtime_root = runtime_root.resolve()
     auto_translator_dir = runtime_root / "AutoTranslator"
     rei_patcher_dir = runtime_root / "ReiPatcher"
@@ -51,6 +52,7 @@ def import_runtime_from_game(source_game: Path, runtime_root: Path) -> RuntimeIn
     if not rei_patcher_source.exists():
         raise FileNotFoundError(f"源游戏缺少 ReiPatcher: {rei_patcher_source}")
 
+    # 导入是“重建运行时目录”，不是增量同步，所以先清空目标目录。
     _reset_directory(runtime_root)
     (runtime_root / "Managed" / "Translators").mkdir(parents=True, exist_ok=True)
 
@@ -78,6 +80,7 @@ def import_runtime_from_game(source_game: Path, runtime_root: Path) -> RuntimeIn
 
 
 def _find_source_managed(source_game: Path) -> Path:
+    # 样例游戏里真正需要的托管补丁文件都来自 *_Data/Managed。
     for managed_dir in source_game.glob("*_Data/Managed"):
         if managed_dir.exists():
             return managed_dir

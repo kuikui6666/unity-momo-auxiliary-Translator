@@ -8,6 +8,7 @@ from .models import TranslationSettings
 
 
 def settings_dir() -> Path:
+    # 把用户本地配置统一收口到项目根下的私有目录，便于忽略和清理。
     return app_root() / ".private_translator"
 
 
@@ -18,6 +19,7 @@ def settings_path() -> Path:
 def load_translation_settings() -> TranslationSettings:
     path = settings_path()
     if not path.exists():
+        # 首次运行时直接回退到内置默认配置，不强制要求预先建文件。
         return TranslationSettings()
     payload = json.loads(path.read_text(encoding="utf-8"))
     return TranslationSettings.from_dict(payload)

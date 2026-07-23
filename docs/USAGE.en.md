@@ -425,8 +425,7 @@ If you plan to maintain this as a public GitHub repository, the minimum good pra
 
 ## 12. Related Entry Points
 
-- project overview and quick intro: [`README.en.md`](../README.en.md)
-- Chinese README: [`README.md`](../README.md)
+- bilingual README overview: [`README.md`](../README.md)
 - GUI launcher: [`main_gui.py`](../main_gui.py)
 - CLI entry: [`main.py`](../main.py)
 - CLI implementation: [`src/game_translator/cli.py`](../src/game_translator/cli.py)

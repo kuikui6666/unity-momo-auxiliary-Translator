@@ -9,12 +9,11 @@
 
 如果你想先快速浏览仓库入口，也可以回到：
 
-- [README 首页](../README.md)
-- [English README](../README.en.md)
+- [双语 README 首页](../README.md)
 
 ## 说明
 
-当前仓库里的详细中文使用说明已经整理在 [用户手册.md](./用户手册.md)，完整英文版已经整理在 [USAGE.en.md](./USAGE.en.md)。
+当前仓库里的详细中文使用说明已经整理在 [用户手册.md](./用户手册.md)，完整英文版已经整理在 [USAGE.en.md](./USAGE.en.md)，首页说明已经合并为同一个双语 [README.md](../README.md)。
 
 这个 `USAGE.md` 主要作为：
 
