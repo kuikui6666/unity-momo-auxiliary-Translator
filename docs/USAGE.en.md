@@ -14,7 +14,7 @@ This guide is written for first-time visitors to the project. Its goal is to hel
 
 This project currently supports `Unity Mono` games only.
 
-You can think of it as a localization-helper tool built around a directory structure like this:
+You can think of it as a translation tool built around a directory structure like this:
 
 - the game root contains `Game.exe`
 - the same level contains `Game_Data`

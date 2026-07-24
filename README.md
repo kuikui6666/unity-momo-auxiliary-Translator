@@ -4,7 +4,7 @@
 
 ## 中文说明
 
-一个面向 `Unity Mono` 游戏目录的本地化辅助工具原型，使用 Python 实现。
+一个面向 `Unity Mono` 游戏目录的本地翻译工具原型，使用 Python 实现。
 
 当前版本主要提供：
 
@@ -26,7 +26,7 @@
 这个仓库更适合被理解为：
 
 - `Unity Mono` 翻译运行时安装器原型
-- 本地化工作流验证工具
+- 面向翻译流程的验证工具
 - 桌面化封装示例
 
 ### 详细文档
@@ -185,7 +185,7 @@ PrivateGameTranslator.spec
 
 ## English
 
-A Python-based localization-helper prototype for `Unity Mono` game directories.
+A Python-based translation-tool prototype for `Unity Mono` game directories.
 
 The current version mainly provides:
 
